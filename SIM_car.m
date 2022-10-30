@@ -2,12 +2,11 @@
 
 % Authors: zk
 % Created:  2022 10 29
-% Updated:
+% Updated:  2022 10 30
 clear
 clc
 close all
-N = 120;%sim-time (s)
-
+dt = 0.5;
 zk = figure;
 axis equal
 axis([-15 15 -15 15]);
@@ -15,8 +14,8 @@ grid on
 x0 = -5;y0 = 5;yaw = pi/2;%inital contidon
 [p,h] = plot_uav(x0, y0, yaw);
 hold on
-disp('µ¥»÷Êó±ê×ó¼üµãÁ½´ÎÉè¶¨Ä¿±êµãÎ»ÖÃºÍ·½Ïò½Ç');
-disp('µ¥»÷Êó±êÓÒ¼üµã½áÊø');
+disp('å•å‡»é¼ æ ‡å·¦é”®ç‚¹ä¸¤æ¬¡è®¾å®šç›®æ ‡ç‚¹ä½ç½®å’Œæ–¹å‘è§’');
+disp('å•å‡»é¼ æ ‡å³é”®ç‚¹ç»“æŸ');
 but = 1;x = x0; y = y0;
 p1 = plot(0, 0,'--');
 p2 = plot(0, 0, 'linewidth',2,'color','r');
@@ -46,7 +45,7 @@ delete(p1);
 
 gd = SE_2(x_, y_, yaw_);
 g_  = SE_2(x, y, yaw);
-g = inv(gd) * g_;
+g = gd \ g_;
 xe = g(1, 3);
 ye = g(2, 3);
 
@@ -58,19 +57,30 @@ y_cir = xc(2) + abs(r).*sin(theta);
 
 p1 = plot(x_cir, y_cir,'color','b','linewidth',2,'linestyle','--');
 
-[t,X]=ode45(@(t,X) model(t,X),[0:1:N],[x;y;yaw;x_;y_;yaw_]);
+X0 = [x;y;yaw;x_;y_;yaw_];
+clear X;
+X = X0;
+j = 1;
+while norm(X(1:2, j) - X(4:5, j)) > 0.1 && abs(X(3, j) - X(6, j)) > 0.01
+    
+    X_ = RK(@model, X(:, j), dt);
+    
+    j = j + 1;
+    X(:, j) = X_;
+end
+t = cumsum(ones(j, 1) * dt);
 % for i = 1:length(X)
 %     dX(:,i) = model(0,X(i,:));
 % end
 H = legend([p,p2,p1,p3,p4],'agent','trajectory','reference','head','goal');
-for i = 1:N+1
+for i = 1:j
     
     delete(p)
     delete(h)
     delete(p2)
     delete(p6)
-    [p,h] = plot_uav(X(i, 1), X(i, 2), X(i, 3));
-    p2 = plot(X(1:i, 1), X(1:i, 2), 'linewidth',2,'color','r');
+    [p,h] = plot_uav(X(1, i), X(2, i), X(3, i));
+    p2 = plot(X(1, 1:i), X(2, 1:i), 'linewidth',2,'color','r');
     H = legend([p,p2,p1,p3,p4],'agent','trajectory','reference','head','goal');
         set(H,...
         'Position',[0.247916666666667 0.738582677165354 0.150694444444444 0.101574803149606],...
@@ -81,13 +91,13 @@ for i = 1:N+1
         'String',{['Time=' num2str(t(i)) 's']},...
         'LineStyle','none',...
         'FitBoxToText','off','FontName','Times New Roman');
-    pause(0.05)
+    pause(0.01)
 %     axis equal
 end
 
-x = X(i, 1);
-y = X(i, 2);
-yaw = X(i, 3);
+x = X(1, i);
+y = X(2, i);
+yaw = X(3, i);
 if norm([x y] - [x_ y_]) > 1
     disp('sim-time is too less');
 end
@@ -125,7 +135,7 @@ function dX = model(t, X)
 gd = SE_2(X(4), X(5), X(6));
 
 g_  = SE_2(X(1), X(2), X(3));
-g = inv(gd) * g_;
+g = gd \ g_;
 xe = g(1, 3);
 ye = g(2, 3);
 oe = asin(g(2,1));
@@ -165,6 +175,15 @@ G(2,3) = y;
 G(3,3) = 1;
 end
 end
+function y_ = RK(fun, y, dt)
+t = 0;
+k1 = fun(t,y)*dt;
+k2 = fun(t,y + 0.5*k1)*dt;
+k3 = fun(t,y + 0.5*k2)*dt;
+k4 = fun(t,y + k3)*dt;
+y_ = y + (k1 + 2*k2 + 2*k3 + k4)/6;
+end
+
 function G = SE_2(x, y, theta)
 G = zeros(3 , 3);
 G(1,1) = cos(theta);
